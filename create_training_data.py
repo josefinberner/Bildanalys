@@ -44,7 +44,7 @@ def finding_lines(image, edges):
 
     ax[3].imshow(image)
     i_points = []
-    pairs = itertools.combinations(lines,2)
+    pairs = itertools.combinations(lines, 2)
     for line1, line2 in pairs:
         p1, p2 = line1
         p3, p4 = line2
@@ -57,7 +57,7 @@ def finding_lines(image, edges):
 
     i_points_clean = clean_up_points(i_points)
     i_points = np.array(i_points_clean)
-    plt.scatter(i_points[:,0],i_points[:,1],s=10)
+    plt.scatter(i_points[:,0], i_points[:, 1], s=10)
     ax[3].set_title('Corner points')
 
     for a in ax:
@@ -211,75 +211,60 @@ def sq_points_2_X(sq, img):
     return [X[1:,:], STANDARD_SIZE]
 
 
-def classify_squares_features(X, STANDARD_SIZE):
-    nbr_of_features = 7
-    features = np.zeros([X.shape[0], nbr_of_features])
-    total_nbr_pixels = STANDARD_SIZE[0]*STANDARD_SIZE[1]
-    print('Pixels: ', total_nbr_pixels)
-    print('Image size', STANDARD_SIZE)
+def set_targets(img_color, squares):
 
-    for ind in np.arange(0, X.shape[0]):
-        img_el = np.reshape(X[ind, :], STANDARD_SIZE)
+    class LineBuilder:
+        def __init__(self, line):
+            self.line = line
+            self.xs = list(line.get_xdata())
+            self.ys = list(line.get_ydata())
+            self.cid = line.figure.canvas.mpl_connect('button_press_event', self)
+            self.target_vec = np.zeros(squares.shape[0],dtype=int)
 
-    # feature 1 - average pixel intensity
-        f1 = img_el.sum() / total_nbr_pixels #/ 255 #normalized to a number from 0-1
-    # feature 2 - total number of "white" pixels div by total number of pixels
-        whites = img_el > 200
-        f2 = np.sum(whites) / total_nbr_pixels
-    # feature 3 - average of "black" pixels
-        blacks = img_el < 50
-        f3 = np.sum(blacks) / total_nbr_pixels
-    # feature 4 - average of white rows
-        f4 = np.sum(whites.sum(axis=1) == 0) / STANDARD_SIZE[0]
-    # feature 5 - average of white cols
-        f5 = np.sum(whites.sum(axis=0) == 0) / STANDARD_SIZE[1]
-    # feature 6 - average of rows with (some) black pixels
-        f6 = np.sum(blacks.sum(axis=1) > 0) / STANDARD_SIZE[0]
-    # feature 7 - average of cols with (some) black pixels
-        f7 = np.sum(blacks.sum(axis=0) > 0) / STANDARD_SIZE[1]
-        features[ind,:] = [f1, f2, f3, f4, f5, f6, f7]
-    return features
+        def __call__(self, event):
+            print('click', event)
+            xcord = event.xdata
+            ycord = event.ydata
+            ind, sq = find_square(xcord, ycord)
+            self.target_vec = toggle_square(ind, sq, self.target_vec)
+            #target = input('Target this square 0-3: ')
+            self.line.set_data(self.xs,self.ys)
+            self.line.figure.canvas.draw()
 
+        def get_target_vec(self):
+            return self.target_vec
 
-def classify_squares_train(X, y):
+    def toggle_square(ind, sq, targets):
+        if targets[ind] == 3:
+            targets[ind] = 0
+        else:
+            targets[ind] = int(targets[ind]+1)
+        print(int(targets[ind]))
+        colors = ["white","green","red","blue"]
+        ax.add_patch(patches.Rectangle((sq[0], sq[2]), sq[1] - sq[0], sq[3] - sq[2], alpha=0.5, fc=colors[targets[ind]]))
+        return targets
 
-    pca = decomposition.PCA(n_components=5, svd_solver='randomized')
-    # Vet inte skillnaden på randomized och inte, borde kolla upp
-    X = pca.fit_transform(X)
-    print(X.shape)
-    print('yshape', y.shape)
+    def find_square(x,y):
+        for sq_ind in np.arange(0,squares.shape[0]):
+            sq = squares[sq_ind,:]
+            if sq[0]< x < sq[1] and sq[2] < y < sq[3]:
+                return sq_ind, sq
+        print('No square found!')
 
-    plotting = False
-    if plotting:
-        plt.figure(4)
-        plt.scatter(X[:, 0], X[:, 1], c=y)
-        plt.colorbar()
-        plt.figure(5)
-        plt.scatter(X[:, 2], X[:, 3], c=y)
-        plt.colorbar()
-        plt.figure(6)
-        plt.scatter(X[:, 0], X[:, 4], c=y)
-        plt.colorbar()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.imshow(img_color)
+    ax.set_title('Classify the squares by clicking on them; white=empty, green=lead, red=letter, blue=other')
+    line, = ax.plot([0], [0])  # empty line
+    linebuilder = LineBuilder(line)
 
-    knn = neighbors.KNeighborsClassifier()
-    knn.fit(X, y)
-    return [pca, knn]
+    plt.show()
+
+    return LineBuilder.get_target_vec(linebuilder)
 
 
-def classify_squares_predict(X, knn):
-    preds = knn.predict(X)
-    return preds
-    # Want to classify the squares into one of the following
-    # 0 = Empty square
-    # 1 = Lead square
-    # 2 = Filled square
-    # 3 = Image/Other/unknown
-
-
-def get_targets(img_color, squares):
-    with open('training_data.pkl', 'rb') as f:
-        squares, targets, training_img = pickle.load(f)
-    print(squares.shape, targets.shape)
+def get_targets(img_color,squares):
+    targets = set_targets(img_color,squares)
     print(targets)
     return targets
 
@@ -288,21 +273,8 @@ def read_process_image(img_file):
     image = io.imread(img_file, as_grey=True)
     img_gray = scipy.ndimage.imread(img_file, mode='L')
     img_color = scipy.ndimage.imread(img_file, mode='RGB')
-    # plt.hist(image)
-    # edges = feature.canny(image, sigma=2, low_threshold=0, high_threshold=0.1)
     edges = feature.canny(image, sigma=0.5, low_threshold=0, high_threshold=0)
     return [img_gray, img_color, edges]
-
-
-def plot_result(img, preds, squares, title):
-    img_prediction = copy.deepcopy(img)
-    for sq_nbr in np.flatnonzero(preds == 3):
-        color_square(sq_nbr, [0,0,250], img_prediction, squares)
-
-    for sq_nbr in np.flatnonzero(preds == 1):
-        color_square(sq_nbr, [0,250,0], img_prediction, squares)
-    compare2plots(img, img_prediction)
-    plt.title(title)
 
 
 def main():
@@ -312,78 +284,16 @@ def main():
     print('nbr of squares returned', squares.shape)
     targets = get_targets(img_color, squares)
 
+    with open('training_data.pkl', 'wb') as f:
+        pickle.dump([squares, targets, img_gray], f)
+    with open('training_data.pkl', 'rb') as f:
+        obj0, obj1, obj2 = pickle.load(f)
+    print(obj0.shape, obj1.shape)
+
     [X, STANDARD_SIZE] = sq_points_2_X(squares, img_gray)
 
-    feature_vec = classify_squares_features(X, STANDARD_SIZE)
-    knn = neighbors.KNeighborsClassifier(n_neighbors=10)
-    knn.fit(feature_vec, targets)
-    preds = classify_squares_predict(feature_vec, knn)
-
-    # Prediction results
-    plot_result(img_color, preds, squares, 'Training data features')
-    plot_squares(img_color, squares)
-
-
-    ############ PCA ##############
-    # PCA of feature-vector
-    knn_pca = neighbors.KNeighborsClassifier(n_neighbors=10)
-    pca = decomposition.PCA(n_components=1, svd_solver='randomized')
-    pcaX = pca.fit_transform(feature_vec)
-    knn_pca.fit(pcaX, targets)
-    preds_pca = classify_squares_predict(pcaX, knn_pca)
-    # Prediction results
-    plot_result(img_color, preds_pca, squares, 'PCA on feature vector')
-    ###############################
-
-    # Validation data
-    img_file = 'DN.Korsord2.jpg'
-    [img_gray2, img_color2, edges2] = read_process_image(img_file)
-    squares2 = finding_squares(edges2, img_color2)
-    [X, STANDARD_SIZE] = sq_points_2_X(squares2, img_gray2)
-    feature_vec = classify_squares_features(X, STANDARD_SIZE)
-    preds2 = classify_squares_predict(feature_vec, knn)
-    plot_result(img_color2, preds2, squares2, 'Validation')
-
-    pcaX = pca.fit_transform(feature_vec)
-    preds_pca = classify_squares_predict(pcaX, knn_pca)
-    plot_result(img_color2, preds_pca, squares2, 'Validation PCA features')
-
-
-def main_pca():
-    img_file = 'DN.Korsord.jpg'
-    [img_gray, img_color, edges] = read_process_image(img_file)
-    squares = finding_squares(edges)
-    targets = get_targets(img_color, squares)
-    [X, STANDARD_SIZE] = sq_points_2_X(squares, img_gray)
-    print('X1', X.shape)
-    [pca, knn] = classify_squares_train(X, targets)
-    pcaX = pca.fit_transform(X)
-    preds = classify_squares_predict(pcaX, knn)
-    plot_result(img_color, preds, squares, 'Training data PCA')
-
-    # Validation
-    img_file = 'DN.Korsord2.jpg'
-    [img_gray2, img_color2, edges2] = read_process_image(img_file)
-    squares2 = finding_squares(edges2)
-    [X, STANDARD_SIZE] = sq_points_2_X(squares2, img_gray2)
-    print('X2', X.shape)
-    pcaX = pca.fit_transform(X)
-    preds2 = classify_squares_predict(pcaX, knn)
-    plot_result(img_color2, preds2, squares2, 'Validation data PCA')
-
-
-
-def plot_squares(img, squares):
-    img_squares = copy.deepcopy(img)  # To not only make a new reference binding to the same object
-    for sq_nbr in np.arange(0, squares.shape[0] - 3, 4):
-        color_square(sq_nbr, [1, 100, 1], img_squares, squares)
-        color_square(sq_nbr + 1, [100, 1, 100], img_squares, squares)
-        color_square(sq_nbr + 2, [1, 1, 100], img_squares, squares)
-        color_square(sq_nbr + 3, [100, 1, 1], img_squares, squares)
-    compare2plots(img, img_squares)
 
 
 if __name__ == '__main__':
     main()
-    # main_pca()
     plt.show(block=True)
