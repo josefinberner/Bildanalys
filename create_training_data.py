@@ -259,7 +259,6 @@ def set_targets(img_color, squares):
     linebuilder = LineBuilder(line)
 
     plt.show()
-
     return LineBuilder.get_target_vec(linebuilder)
 
 
@@ -291,7 +290,6 @@ def main():
     print(obj0.shape, obj1.shape)
 
     [X, STANDARD_SIZE] = sq_points_2_X(squares, img_gray)
-
 
 
 if __name__ == '__main__':

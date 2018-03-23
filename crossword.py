@@ -53,6 +53,7 @@ def finding_lines(image, edges):
         a.set_adjustable('box-forced')
 
     plt.tight_layout()
+    plt.show()
     return lines, i_points
 
 def plot_result(img, predictions, squares, titles):
@@ -147,6 +148,7 @@ def get_intersect(a1, a2, b1, b2):
 
 def finding_squares(img, img_col):
     lines, corner_points = finding_lines(img_col, img)
+    print('lines', lines.shape)
     squares=np.array([0, 0, 0, 0], dtype=int)
     for corner in corner_points:
         upp_right = closest_right(corner, corner_points)
@@ -247,7 +249,19 @@ def read_process_image(img_file):
     image = io.imread(img_file, as_grey=True)
     img_gray = scipy.ndimage.imread(img_file, mode='L')
     img_color = scipy.ndimage.imread(img_file, mode='RGB')
+
+    # scale_factor = 1.2
+    img_size = (int(image.shape[0]/scale_factor), int(image.shape[1]/scale_factor))
+    # image = scipy.ndimage.zoom(image, 0.1)
+    #image.zoom(0.5)  #TODO: zoom seems to work much better but this code still doesn't work.
+    # #TODO: Looks like resize is doing a terrible job, check what it looks like for the elements before
+    # img_gray.resize(img_size)
+    # img_color.resize(img_size)
+    # print(image.shape)
+    # plt.imshow(image)
+    # plt.show()
     edges = feature.canny(image, sigma=0.5, low_threshold=0, high_threshold=0)
+    print(edges.shape)
     return [img_gray, img_color, edges]
 
 
@@ -305,9 +319,9 @@ def classify_crossword(img_file, titleline):
 
 def main():  # TODO: Make it possible to run file with image file as argument
 
-    classify_crossword('DN.Korsord.jpg', 'Training data')
-    classify_crossword('DN.Korsord2.jpg', 'Validation')
-
+ #   classify_crossword('DN.Korsord.jpg', 'Training data')
+ #   classify_crossword('DN.Korsord2.jpg', 'Validation')
+    classify_crossword('bilder/20180313_143109.jpg', 'Half solved')
 
 if __name__ == '__main__':
     main()
